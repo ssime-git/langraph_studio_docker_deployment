@@ -1,0 +1,131 @@
+volumes:
+  langgraph-data:
+    driver: local
+  langgraph-agents:
+    driver: local
+
+services:
+  # ===========================
+  # INFRASTRUCTURE DE BASE
+  # ===========================
+  
+  # Service Redis pour la gestion des tâches et le streaming
+  langgraph-redis:
+    image: redis:6
+    container_name: langgraph-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 1s
+      retries: 5
+    networks:
+      - langgraph-network
+
+  # Service PostgreSQL pour la persistence
+  langgraph-postgres:
+    image: postgres:16
+    container_name: langgraph-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: langgraph
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - langgraph-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      start_period: 10s
+      timeout: 1s
+      retries: 5
+      interval: 5s
+    networks:
+      - langgraph-network
+
+  # ===========================
+  # API LANGGRAPH
+  # ===========================
+  
+  # Service API LangGraph principal
+  langgraph-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: langgraph-api
+    restart: unless-stopped
+    ports:
+      - "8123:8000"
+    depends_on:
+      langgraph-redis:
+        condition: service_healthy
+      langgraph-postgres:
+        condition: service_healthy
+    environment:
+      # Configuration Base de données
+      REDIS_URI: redis://langgraph-redis:6379
+      DATABASE_URI: postgres://postgres:postgres@langgraph-postgres:5432/langgraph?sslmode=disable
+      
+      # Clés API (à configurer dans .env)
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      
+      # Configuration du serveur
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGGRAPH_AUTH_TYPE: ${LANGGRAPH_AUTH_TYPE:-noop}
+    volumes:
+      - ./agents:/app/agents:ro
+      - ./langgraph.json:/app/langgraph.json:ro
+    networks:
+      - langgraph-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ===========================
+  # INTERFACE WEB
+  # ===========================
+  
+  # Interface web pour créer et gérer les agents
+  langgraph-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: langgraph-ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      LANGGRAPH_API_URL: http://langgraph-api:8000
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:8123
+    volumes:
+      - ./agents:/app/agents
+    depends_on:
+      - langgraph-api
+    networks:
+      - langgraph-network
+
+  # ===========================
+  # PROXY NGINX
+  # ===========================
+  
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: langgraph-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - langgraph-api
+      - langgraph-ui
+    networks:
+      - langgraph-network
+
+networks:
+  langgraph-network:
+    driver: bridge

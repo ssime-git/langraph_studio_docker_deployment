@@ -1,0 +1,23 @@
+{
+  "graphs": {
+    "example": "./agents/example/agent.py:app",
+    "parallel_sectioning": "./agents/parallel_sectioning/agent.py:app",
+    "parallel_voting": "./agents/parallel_voting/agent.py:app",
+    "prompt_chaining": "./agents/prompt_chaining/agent.py:app",
+    "routing": "./agents/routing/agent.py:app",
+    "orchestrator_worker": "./agents/orchestrator_worker/agent.py:app",
+    "evaluator_optimizer": "./agents/evaluator_optimizer/agent.py:app",
+    "tool_agent": "./agents/tool_agent/agent.py:app"
+  },
+  "env": ".env",
+  "python_version": "3.12",
+  "dependencies": [
+    "langgraph",
+    "langgraph-cli[inmem]",
+    "langchain",
+    "langchain-openai",
+    "langchain-anthropic",
+    "langchain-core"
+  ],
+  "dockerfile_lines": []
+}

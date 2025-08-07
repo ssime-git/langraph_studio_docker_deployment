@@ -1,0 +1,20 @@
+# Dockerfile pour l'interface web
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Installation des dépendances
+COPY package.json package-lock.json* ./
+RUN npm ci || npm install
+
+# Copie du code source
+COPY ui/ ./
+
+# Build de l'application
+RUN npm run build
+
+# Port
+EXPOSE 3000
+
+# Démarrage
+CMD ["npm", "start"]

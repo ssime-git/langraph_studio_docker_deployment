@@ -1,0 +1,36 @@
+# Dockerfile pour l'API LangGraph
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Installation des dépendances système
+RUN apt-get update && apt-get install -y \
+    gcc \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installation de LangGraph et dépendances
+RUN pip install --no-cache-dir \
+    langgraph \
+    "langgraph-cli[inmem]" \
+    langchain \
+    langchain-openai \
+    langchain-anthropic \
+    langchain-core \
+    fastapi \
+    uvicorn \
+    pydantic \
+    redis \
+    psycopg2-binary
+
+# Copie de la configuration
+COPY langgraph.json .
+COPY agents/ ./agents/
+
+# Port par défaut
+EXPOSE 8000
+
+# Commande de démarrage (dev sans hot-reload ni ouverture navigateur)
+CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8000", "--config", "langgraph.json", "--no-reload", "--no-browser"]

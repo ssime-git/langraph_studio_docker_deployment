@@ -1,0 +1,14 @@
+{
+  "graphs": {
+    "chatbot": "./agent.py:app"
+  },
+  "env": "../../.env",
+  "python_version": "3.12",
+  "dependencies": [
+    "langgraph",
+    "langchain",
+    "langchain-openai",
+    "langchain-core"
+  ],
+  "dockerfile_lines": []
+}
