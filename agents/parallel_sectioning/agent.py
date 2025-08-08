@@ -50,13 +50,27 @@ def call_llm_3(state: State):
 
 def aggregator(state: State):
     topic = state.get("topic") or _last_user_text(state)
-    combined = (
-        f"Here is a story, joke, and poem about {topic}!\n\n"
-        f"STORY:\n{state['story']}\n\n"
-        f"JOKE:\n{state['joke']}\n\n"
-        f"POEM:\n{state['poem']}"
-    )
-    return {"combined_output": combined, "messages": [AIMessage(content=combined)]}
+    story = state.get("story")
+    joke = state.get("joke")
+    poem = state.get("poem")
+
+    parts = []
+    if story:
+        parts.append(f"STORY:\n{story}")
+    if joke:
+        parts.append(f"JOKE:\n{joke}")
+    if poem:
+        parts.append(f"POEM:\n{poem}")
+
+    header = f"Here is a story, joke, and poem about {topic}!" if topic else "Collected pieces:"
+    combined = header + ("\n\n" + "\n\n".join(parts) if parts else "\n(Waiting for sections...)" )
+
+    # Only emit final assistant message when all sections are present
+    done = all([story, joke, poem])
+    if done:
+        return {"combined_output": combined, "messages": [AIMessage(content=combined)]}
+    else:
+        return {"combined_output": combined}
 
 
 # Build graph

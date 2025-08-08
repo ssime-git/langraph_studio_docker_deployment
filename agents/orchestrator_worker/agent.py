@@ -3,6 +3,7 @@ Orchestrator-Worker example: orchestrator splits, workers execute, aggregator co
 Chat-compatible: messages state with add_messages; final assistant message appended.
 """
 from typing import TypedDict, Annotated, Sequence, List, NotRequired
+from operator import add as list_add
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI
@@ -15,7 +16,8 @@ class State(TypedDict):
     messages: Annotated[Sequence[AnyMessage], add_messages]
     task: NotRequired[str]
     subtasks: NotRequired[List[str]]
-    results: NotRequired[List[str]]
+    # Allow concurrent fan-in writes from workers
+    results: Annotated[NotRequired[List[str]], list_add]  # type: ignore[valid-type]
     final: NotRequired[str]
 
 
@@ -34,25 +36,31 @@ def orchestrator(state: State):
     )
     lines = [l.strip("- ") for l in msg.content.splitlines() if l.strip()]
     subs = [l for l in lines if l]
-    subs = subs[:3] if subs else [task]
+    # Ensure exactly 3 slots to avoid IndexError in workers
+    if not subs:
+        subs = [task]
+    if len(subs) < 3:
+        subs = subs + [f"(Skip)" for _ in range(3 - len(subs))]
+    else:
+        subs = subs[:3]
     return {"subtasks": subs}
 
 
 def worker_factory(idx: int):
     def _worker(state: State):
-        sub = state["subtasks"][idx]
+        subs = state.get("subtasks", [])
+        if idx >= len(subs) or not subs[idx] or subs[idx].strip().lower() == "(skip)":
+            return {}
+        sub = subs[idx]
         msg = llm.invoke(f"Do this subtask succinctly: {sub}")
-        res = list(state.get("results", []))
-        while len(res) <= idx:
-            res.append("")
-        res[idx] = msg.content
-        return {"results": res}
+        # Return a single-item list; LangGraph merges with list_add
+        return {"results": [msg.content]}
     return _worker
 
 
 def aggregate(state: State):
-    parts = state.get("results", [])
-    combined = "\n\n".join(f"- {p}" for p in parts if p)
+    parts = [p for p in state.get("results", []) if p]
+    combined = "\n\n".join(f"- {p}" for p in parts) if parts else "No results produced."
     return {"final": combined, "messages": [AIMessage(content=combined)]}
 
 

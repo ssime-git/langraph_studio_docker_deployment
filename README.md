@@ -82,7 +82,7 @@ agents/
 
 **agent.py**:
 ```python
-from langgraph.graph import Graph, END
+from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 
 class State(TypedDict):
@@ -109,6 +109,25 @@ Si vous préférez utiliser LangGraph Studio officiel:
 2. Si le Chat ne fonctionne pas avec le port 8123, utilisez le proxy Nginx (qui ajoute les en-têtes CORS): https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
 3. Ajoutez votre clé LangSmith côté API: export LANGSMITH_API_KEY=... (ou dans `.env`) afin d'activer l'affichage des runs
 4. Studio se connectera à votre serveur local
+
+## 🌐 Interfaces & URLs
+
+- __UI locale (éditeur d’agents)__ — http://localhost
+  - Créer/éditer les agents dans `agents/`
+  - Tester via l’onglet "Test" (appelle l’API en local)
+
+- __API LangGraph__ — http://localhost:8123
+  - C’est une API, pas un site. La racine `/` renvoie "Not Found" (normal)
+  - Documentation interactive: http://localhost:8123/docs
+  - Utilisée par l’UI locale et par LangGraph Studio
+
+- __LangGraph Studio (cloud)__ — https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
+  - Outil officiel pour visualiser et chatter avec vos graphs
+  - Affiche les runs si `LANGSMITH_API_KEY` est défini côté API
+
+Notes:
+- Après ajout d’un nouvel agent, enregistrez-le dans `langgraph.json` à la racine puis redémarrez le service `langgraph-api`.
+- Le fichier `langgraph.json` de l’hôte est monté dans le conteneur à `/app/langgraph.json`.
 
 ## 📝 API Endpoints
 
@@ -190,13 +209,60 @@ Pour la production:
 - [LangGraph Examples](https://github.com/langchain-ai/langgraph/tree/main/examples)
 - [LangChain Academy](https://academy.langchain.com/courses/intro-to-langgraph)
 
+## 🏗️ Architecture
+
+Cette stack se compose de 5 services principaux, reliés par le réseau `langgraph-network`:
+
+- __API LangGraph (`langgraph-api`)__: charge `langgraph.json`, expose `/runs/stream`, `/threads`, etc.
+- __Redis (`langgraph-redis`)__: file d'attente interne, streaming et orchestration in-memory.
+- __PostgreSQL (`langgraph-postgres`)__: persistence des runs/threads quand activée.
+- __UI locale (`langgraph-ui`)__: éditeur d'agents (Monaco), tests via `/runs/stream`.
+- __Nginx (`langgraph-proxy`)__: proxy optionnel (CORS, routage propre).
+
+```mermaid
+graph TD
+  Browser[🧑‍💻 Browser] -->|UI HTTP| Nginx[(Nginx Proxy)]
+  Nginx -->|/api -> 8123| API[LangGraph API]
+  Browser -->|Direct dev| API
+  API --> Redis[(Redis)]
+  API --> PG[(PostgreSQL)]
+  API -->|Telemetry opt| LangSmith[(LangSmith Cloud)]
+```
+
+### Découverte des Graphs (assistants)
+- Au démarrage, l'API lit `langgraph.json` (dans le conteneur: `/app/langgraph.json`).
+- Dans ce repo, __le fichier hôte est monté dans le conteneur__ via `docker-compose.yml`:
+  - `- ./langgraph.json:/app/langgraph.json:ro`
+- Lorsqu’on ajoute un nouvel agent, on l’enregistre dans `langgraph.json` et on __redémarre le service API__ pour relire la config.
+- Vérification rapide dans le conteneur:
+  - `docker-compose exec langgraph-api cat /app/langgraph.json`
+
+## 🔄 Flux d’exécution (Test/Chat)
+
+```mermaid
+sequenceDiagram
+  participant B as Browser (UI/Studio)
+  participant N as Nginx
+  participant A as LangGraph API
+  participant R as Redis
+  participant D as Postgres
+  participant LS as LangSmith (opt)
+
+  B->>N: POST /runs/stream { assistant_id, input }
+  N->>A: Proxy request
+  A->>R: Enqueue + stream events
+  A->>D: Persist thread/state (si activé)
+  A-->>B: SSE tokens / checkpoints
+  A-->>LS: Metadata/telemetry (si clé configurée)
+```
+
+### Schéma d’état côté agents
+- Chaque agent expose `app` et un `State` avec `messages: Annotated[Sequence[AnyMessage], add_messages]`.
+- Les autres champs d’état sont optionnels pour accepter `{ "messages": [...] }`.
+- Le dernier nœud ajoute un `AIMessage` dans `messages` pour la compatibilité Chat.
+
 ## 💡 Tips & Tricks
 
 1. **Hot Reload**: Les modifications dans l'interface web sont automatiquement rechargées
 2. **Multiple Agents**: Créez autant d'agents que nécessaire dans le dossier `agents/`
 3. **Partage**: Les agents peuvent être exportés et partagés comme dossiers
-
-## 🤝 Support
-
-- Issues GitHub: https://github.com/langchain-ai/langgraph/issues
-- Discord LangChain: https://discord.gg/langchain

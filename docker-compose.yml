@@ -73,7 +73,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       
       # Configuration du serveur
-      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
       LANGGRAPH_AUTH_TYPE: ${LANGGRAPH_AUTH_TYPE:-noop}
     volumes:
       - ./agents:/app/agents:ro
