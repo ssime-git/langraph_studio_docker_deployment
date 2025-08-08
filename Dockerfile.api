@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir \
     langchain-openai \
     langchain-anthropic \
     langchain-core \
+    watchfiles \
     fastapi \
     uvicorn \
     pydantic \
@@ -28,9 +29,10 @@ RUN pip install --no-cache-dir \
 # Copie de la configuration
 COPY langgraph.json .
 COPY agents/ ./agents/
+COPY api_watcher.py ./
 
 # Port par défaut
 EXPOSE 8000
 
-# Commande de démarrage (dev sans hot-reload ni ouverture navigateur)
-CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8000", "--config", "langgraph.json", "--no-reload", "--no-browser"]
+# Commande de démarrage: watcher qui redémarre l'API sur changement
+CMD ["python", "-u", "api_watcher.py"]

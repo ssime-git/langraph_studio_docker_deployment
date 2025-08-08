@@ -67,37 +67,44 @@ L'interface web locale permet de:
 3. Cliquez sur "Exécuter Test"
 4. Voyez le résultat en temps réel
 
-## 🔧 Structure des agents
-
-Chaque agent doit avoir:
-
-```
-agents/
-├── mon-agent/
-│   ├── agent.py          # Code Python de l'agent
-│   └── langgraph.json     # Configuration
-```
 
 ### Exemple d'agent minimal
 
+Utilisez la syntaxe suivante pour que Studio détecte le mode Chat:
+
+- messages dans l'état: `messages: Annotated[List[BaseMessage], add_messages]`
+- retourner des messages `AIMessage`/`HumanMessage` depuis le nœud
+- compiler le graphe et exposer `app`
+
 **agent.py**:
 ```python
+# agent.py
+from typing import TypedDict, Annotated, List
 from langgraph.graph import StateGraph, END
-from langchain_openai import ChatOpenAI
+from langgraph.graph.message import add_messages
+from langchain_core.messages import AIMessage, HumanMessage, BaseMessage
 
 class State(TypedDict):
-    messages: list
+    # Strongly typed messages so schema includes LC message structure
+    messages: Annotated[List[BaseMessage], add_messages]
 
-def agent_node(state):
-    llm = ChatOpenAI()
-    response = llm.invoke(state["messages"])
-    return {"messages": [response]}
+def agent_node(state: State):
+    last_user = None
+    # Handle both LC messages and dicts defensively
+    for m in reversed(state["messages"]):
+        if isinstance(m, HumanMessage):
+            last_user = m.content
+            break
+        if isinstance(m, dict) and m.get("role") == "user":
+            last_user = m.get("content", "")
+            break
+    reply = f"Echo: {last_user}" if last_user else "Hello from echo agent"
+    return {"messages": [AIMessage(content=reply)]}
 
 graph = StateGraph(State)
 graph.add_node("agent", agent_node)
 graph.set_entry_point("agent")
 graph.add_edge("agent", END)
-
 app = graph.compile()
 ```
 
@@ -107,6 +114,9 @@ Si vous préférez utiliser LangGraph Studio officiel:
 
 1. Assurez-vous que l'API est lancée (port 8123)
 2. Si le Chat ne fonctionne pas avec le port 8123, utilisez le proxy Nginx (qui ajoute les en-têtes CORS): https://smith.langchain.com/studio/?baseUrl=http://localhost:8123
+
+On peut aussi utiliser (chemin par NGINX) https://smith.langchain.com/studio/?baseUrl=http://localhost:8080 ou https://smith.langchain.com/studio/?baseUrl=http://localhost/api
+
 3. Ajoutez votre clé LangSmith côté API: export LANGSMITH_API_KEY=... (ou dans `.env`) afin d'activer l'affichage des runs
 4. Studio se connectera à votre serveur local
 

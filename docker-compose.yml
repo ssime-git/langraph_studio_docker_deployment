@@ -102,6 +102,7 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8123
     volumes:
       - ./agents:/app/agents
+      - ./langgraph.json:/app/langgraph.json
     depends_on:
       - langgraph-api
     networks:

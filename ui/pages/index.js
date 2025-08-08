@@ -10,7 +10,7 @@ export default function AgentStudio() {
   const [code, setCode] = useState('');
   const [config, setConfig] = useState('');
   const [logs, setLogs] = useState([]);
-  const [testInput, setTestInput] = useState('{"messages": [{"role": "human", "content": "Hello!"}]}');
+  const [testInput, setTestInput] = useState('{"messages": [{"role": "user", "content": "Hello!"}]}');
   const [testOutput, setTestOutput] = useState('');
   const [testEvents, setTestEvents] = useState([]);
   const [activeTab, setActiveTab] = useState('code');
@@ -146,7 +146,11 @@ app = graph.compile()
           stream_mode: 'messages-tuple'
         })
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        let detail = '';
+        try { detail = await resp.text(); } catch (_) {}
+        throw new Error(`HTTP ${resp.status} ${detail || ''}`.trim());
+      }
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';

@@ -7,7 +7,8 @@
     "routing": "./agents/routing/agent.py:app",
     "orchestrator_worker": "./agents/orchestrator_worker/agent.py:app",
     "evaluator_optimizer": "./agents/evaluator_optimizer/agent.py:app",
-    "tool_agent": "./agents/tool_agent/agent.py:app"
+    "tool_agent": "./agents/tool_agent/agent.py:app",
+    "NewAgent": "./agents/NewAgent/agent.py:app"
   },
   "env": ".env",
   "python_version": "3.12",
